@@ -6,6 +6,7 @@ let package = Package(
   name: "swiftui-pager",
   platforms: [
     SupportedPlatform.iOS(SupportedPlatform.IOSVersion.v18),
+    SupportedPlatform.macOS(SupportedPlatform.MacOSVersion.v15),
   ],
   products: [
     .library(name: "Pager", targets: ["Pager"]),
