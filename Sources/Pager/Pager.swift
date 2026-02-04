@@ -138,17 +138,21 @@ public struct PagerView<Selection: Hashable>: View {
   @ViewBuilder
   private func dividerView() -> some View {
     VStack(spacing: 0) {
-      GeometryReader { proxy in
-        let count = CGFloat(pages.count)
-        let tabWidth = proxy.size.width / count
-        let selectedIndex = pages.firstIndex { $0.id == AnyHashable(selection.wrappedValue) } ?? 0
+      if pages.isEmpty {
+        Color.clear.frame(height: 4)
+      } else {
+        GeometryReader { proxy in
+          let count = CGFloat(pages.count)
+          let tabWidth = proxy.size.width / count
+          let selectedIndex = pages.firstIndex { $0.id == AnyHashable(selection.wrappedValue) } ?? 0
 
-        RoundedRectangle(cornerRadius: 2)
-          .fill(Color.accentColor)
-          .frame(width: tabWidth, height: 4)
-          .offset(x: tabWidth * CGFloat(selectedIndex))
+          RoundedRectangle(cornerRadius: 2)
+            .fill(Color.accentColor)
+            .frame(width: tabWidth, height: 4)
+            .offset(x: tabWidth * CGFloat(selectedIndex))
+        }
+        .frame(height: 4)
       }
-      .frame(height: 4)
 
       Divider()
     }
