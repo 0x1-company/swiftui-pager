@@ -163,9 +163,7 @@ public struct PagerView<Selection: Hashable>: View {
       }
     }
     .frame(maxHeight: .infinity)
-    #if os(iOS)
     .tabViewStyle(.page(indexDisplayMode: .never))
-    #endif
   }
 }
 
