@@ -154,14 +154,25 @@ public struct PagerView<Selection: Hashable>: View {
 
   @ViewBuilder
   private func contentView() -> some View {
-    TabView(selection: selection) {
-      ForEach(pages) { page in
-        page.content
-          .tag(page.id)
+    ScrollView(.horizontal) {
+      LazyHStack(spacing: 0) {
+        ForEach(pages) { page in
+          page.content
+            .containerRelativeFrame(.horizontal)
+        }
       }
+      .scrollTargetLayout()
     }
-    .frame(maxHeight: .infinity)
-    .tabViewStyle(.page(indexDisplayMode: .never))
+    .scrollTargetBehavior(.paging)
+    .scrollPosition(id: Binding<Selection?>(
+      get: { selection.wrappedValue },
+      set: { newValue in
+        if let newValue {
+          selection.wrappedValue = newValue
+        }
+      }
+    ))
+    .scrollIndicators(.hidden)
   }
 }
 
