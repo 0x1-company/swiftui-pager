@@ -2,14 +2,28 @@ import SwiftUI
 
 // MARK: - Page
 
-public struct Page<Content: View, Label: View> {
+public struct Page<Selection: Hashable, Content: View, Label: View> {
+  let id: Selection
   let content: Content
   let label: Label
 
   public init(
+    id: Selection,
     @ViewBuilder content: () -> Content,
-    @ViewBuilder label: () -> Label,
+    @ViewBuilder label: () -> Label
   ) {
+    self.id = id
+    self.content = content()
+    self.label = label()
+  }
+}
+
+extension Page where Selection == Int {
+  public init(
+    @ViewBuilder content: () -> Content,
+    @ViewBuilder label: () -> Label
+  ) {
+    self.id = 0
     self.content = content()
     self.label = label()
   }
@@ -18,29 +32,31 @@ public struct Page<Content: View, Label: View> {
 // MARK: - AnyPage
 
 public struct AnyPage: Identifiable {
-  public let id: Int
+  public let id: AnyHashable
   let content: AnyView
   let label: AnyView
 
-  fileprivate init(id: Int, content: AnyView, label: AnyView) {
-    self.id = id
+  fileprivate init<S: Hashable>(id: S, content: AnyView, label: AnyView) {
+    self.id = AnyHashable(id)
     self.content = content
     self.label = label
+  }
+
+  func typedID<T: Hashable>(as type: T.Type) -> T? {
+    id.base as? T
   }
 }
 
 // MARK: - PageBuilder
 
 @resultBuilder
-public struct PageBuilder {
-  public static func buildExpression(_ page: Page<some View, some View>) -> [AnyPage] {
-    [AnyPage(id: 0, content: AnyView(page.content), label: AnyView(page.label))]
+public struct PageBuilder<Selection: Hashable> {
+  public static func buildExpression(_ page: Page<Selection, some View, some View>) -> [AnyPage] {
+    [AnyPage(id: page.id, content: AnyView(page.content), label: AnyView(page.label))]
   }
 
   public static func buildBlock(_ components: [AnyPage]...) -> [AnyPage] {
-    components.flatMap(\.self).enumerated().map { index, page in
-      AnyPage(id: index, content: page.content, label: page.label)
-    }
+    components.flatMap(\.self)
   }
 
   public static func buildOptional(_ component: [AnyPage]?) -> [AnyPage] {
@@ -56,14 +72,38 @@ public struct PageBuilder {
   }
 }
 
+extension PageBuilder where Selection == Int {
+  public static func buildBlock(_ components: [AnyPage]...) -> [AnyPage] {
+    components.flatMap(\.self).enumerated().map { index, page in
+      AnyPage(id: index, content: page.content, label: page.label)
+    }
+  }
+}
+
 // MARK: - PagerView
 
-public struct PagerView: View {
+public struct PagerView<Selection: Hashable>: View {
   private let pages: [AnyPage]
-  @State private var selection: Int = 0
+  @Binding private var externalSelection: Selection
+  @State private var internalSelection: Selection
+  private let usesExternalBinding: Bool
 
-  public init(@PageBuilder content: () -> [AnyPage]) {
-    pages = content()
+  public init(
+    selection: Binding<Selection>,
+    @PageBuilder<Selection> content: () -> [AnyPage]
+  ) {
+    self.pages = content()
+    self._externalSelection = selection
+    self._internalSelection = State(initialValue: selection.wrappedValue)
+    self.usesExternalBinding = true
+  }
+
+  private var selection: Binding<Selection> {
+    if usesExternalBinding {
+      return $externalSelection
+    } else {
+      return $internalSelection
+    }
   }
 
   public var body: some View {
@@ -74,7 +114,7 @@ public struct PagerView: View {
           dividerView()
         }
       }
-      .animation(.easeInOut(duration: 0.2), value: selection)
+      .animation(.easeInOut(duration: 0.2), value: selection.wrappedValue)
   }
 
   @ViewBuilder
@@ -82,7 +122,9 @@ public struct PagerView: View {
     HStack(spacing: 4) {
       ForEach(pages) { page in
         Button {
-          selection = page.id
+          if let typedID = page.typedID(as: Selection.self) {
+            selection.wrappedValue = typedID
+          }
         } label: {
           page.label
             .foregroundStyle(Color.primary)
@@ -96,16 +138,21 @@ public struct PagerView: View {
   @ViewBuilder
   private func dividerView() -> some View {
     VStack(spacing: 0) {
-      GeometryReader { proxy in
-        let count = CGFloat(pages.count)
-        let tabWidth = proxy.size.width / count
+      if pages.isEmpty {
+        Color.clear.frame(height: 4)
+      } else {
+        GeometryReader { proxy in
+          let count = CGFloat(pages.count)
+          let tabWidth = proxy.size.width / count
+          let selectedIndex = pages.firstIndex { $0.id == AnyHashable(selection.wrappedValue) } ?? 0
 
-        RoundedRectangle(cornerRadius: 2)
-          .fill(Color.accentColor)
-          .frame(width: tabWidth, height: 4)
-          .offset(x: tabWidth * CGFloat(selection))
+          RoundedRectangle(cornerRadius: 2)
+            .fill(Color.accentColor)
+            .frame(width: tabWidth, height: 4)
+            .offset(x: tabWidth * CGFloat(selectedIndex))
+        }
+        .frame(height: 4)
       }
-      .frame(height: 4)
 
       Divider()
     }
@@ -113,10 +160,10 @@ public struct PagerView: View {
 
   @ViewBuilder
   private func contentView() -> some View {
-    TabView(selection: $selection) {
+    TabView(selection: selection) {
       ForEach(pages) { page in
         page.content
-          .tag(page.id)
+          .tag(page.typedID(as: Selection.self))
       }
     }
     .frame(maxHeight: .infinity)
@@ -124,7 +171,16 @@ public struct PagerView: View {
   }
 }
 
-#Preview {
+extension PagerView where Selection == Int {
+  public init(@PageBuilder<Int> content: () -> [AnyPage]) {
+    self.pages = content()
+    self._externalSelection = .constant(0)
+    self._internalSelection = State(initialValue: 0)
+    self.usesExternalBinding = false
+  }
+}
+
+#Preview("Int Selection (Backward Compatible)") {
   PagerView {
     Page {
       Text("Home")
@@ -144,4 +200,38 @@ public struct PagerView: View {
       Text("Account")
     }
   }
+}
+
+#Preview("Custom Selection Type") {
+  enum Tab: Hashable {
+    case home, search, account
+  }
+
+  struct ContentView: View {
+    @State private var selectedTab: Tab = .home
+
+    var body: some View {
+      PagerView(selection: $selectedTab) {
+        Page(id: Tab.home) {
+          Text("Home Content")
+        } label: {
+          Text("Home")
+        }
+
+        Page(id: Tab.search) {
+          Text("Search Content")
+        } label: {
+          Text("Search")
+        }
+
+        Page(id: Tab.account) {
+          Text("Account Content")
+        } label: {
+          Text("Account")
+        }
+      }
+    }
+  }
+
+  return ContentView()
 }

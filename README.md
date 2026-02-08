@@ -5,7 +5,7 @@ A simple SwiftUI pager component that provides tab navigation with swipeable pag
 ## Requirements
 
 - Swift 6.2+
-- iOS, macOS, tvOS, watchOS, visionOS
+- iOS, tvOS, watchOS, visionOS
 
 ## Installation
 
@@ -48,6 +48,44 @@ PagerView {
     Text("Account")
   } label: {
     Text("Account")
+  }
+}
+```
+
+## Custom Selection Type
+
+`PagerView` supports a generic `Selection` type, allowing you to use a custom `Hashable` enum instead of the default `Int` index. Pass a `Binding<Selection>` to track and control the selected page.
+
+```swift
+import Pager
+
+enum Tab: Hashable {
+  case home, search, account
+}
+
+struct ContentView: View {
+  @State private var selectedTab: Tab = .home
+
+  var body: some View {
+    PagerView(selection: $selectedTab) {
+      Page(id: Tab.home) {
+        Text("Home Content")
+      } label: {
+        Text("Home")
+      }
+
+      Page(id: Tab.search) {
+        Text("Search Content")
+      } label: {
+        Text("Search")
+      }
+
+      Page(id: Tab.account) {
+        Text("Account Content")
+      } label: {
+        Text("Account")
+      }
+    }
   }
 }
 ```
