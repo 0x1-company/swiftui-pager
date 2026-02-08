@@ -31,19 +31,15 @@ extension Page where Selection == Int {
 
 // MARK: - AnyPage
 
-public struct AnyPage: Identifiable {
-  public let id: AnyHashable
+public struct AnyPage<Selection: Hashable>: Identifiable {
+  public let id: Selection
   let content: AnyView
   let label: AnyView
 
-  fileprivate init<S: Hashable>(id: S, content: AnyView, label: AnyView) {
-    self.id = AnyHashable(id)
+  fileprivate init(id: Selection, content: AnyView, label: AnyView) {
+    self.id = id
     self.content = content
     self.label = label
-  }
-
-  func typedID<T: Hashable>(as type: T.Type) -> T? {
-    id.base as? T
   }
 }
 
@@ -51,29 +47,29 @@ public struct AnyPage: Identifiable {
 
 @resultBuilder
 public struct PageBuilder<Selection: Hashable> {
-  public static func buildExpression(_ page: Page<Selection, some View, some View>) -> [AnyPage] {
+  public static func buildExpression(_ page: Page<Selection, some View, some View>) -> [AnyPage<Selection>] {
     [AnyPage(id: page.id, content: AnyView(page.content), label: AnyView(page.label))]
   }
 
-  public static func buildBlock(_ components: [AnyPage]...) -> [AnyPage] {
+  public static func buildBlock(_ components: [AnyPage<Selection>]...) -> [AnyPage<Selection>] {
     components.flatMap(\.self)
   }
 
-  public static func buildOptional(_ component: [AnyPage]?) -> [AnyPage] {
+  public static func buildOptional(_ component: [AnyPage<Selection>]?) -> [AnyPage<Selection>] {
     component ?? []
   }
 
-  public static func buildEither(first component: [AnyPage]) -> [AnyPage] {
+  public static func buildEither(first component: [AnyPage<Selection>]) -> [AnyPage<Selection>] {
     component
   }
 
-  public static func buildEither(second component: [AnyPage]) -> [AnyPage] {
+  public static func buildEither(second component: [AnyPage<Selection>]) -> [AnyPage<Selection>] {
     component
   }
 }
 
 extension PageBuilder where Selection == Int {
-  public static func buildBlock(_ components: [AnyPage]...) -> [AnyPage] {
+  public static func buildBlock(_ components: [AnyPage<Selection>]...) -> [AnyPage<Selection>] {
     components.flatMap(\.self).enumerated().map { index, page in
       AnyPage(id: index, content: page.content, label: page.label)
     }
@@ -83,14 +79,14 @@ extension PageBuilder where Selection == Int {
 // MARK: - PagerView
 
 public struct PagerView<Selection: Hashable>: View {
-  private let pages: [AnyPage]
+  private let pages: [AnyPage<Selection>]
   @Binding private var externalSelection: Selection
   @State private var internalSelection: Selection
   private let usesExternalBinding: Bool
 
   public init(
     selection: Binding<Selection>,
-    @PageBuilder<Selection> content: () -> [AnyPage]
+    @PageBuilder<Selection> content: () -> [AnyPage<Selection>]
   ) {
     self.pages = content()
     self._externalSelection = selection
@@ -122,9 +118,7 @@ public struct PagerView<Selection: Hashable>: View {
     HStack(spacing: 4) {
       ForEach(pages) { page in
         Button {
-          if let typedID = page.typedID(as: Selection.self) {
-            selection.wrappedValue = typedID
-          }
+          selection.wrappedValue = page.id
         } label: {
           page.label
             .foregroundStyle(Color.primary)
@@ -144,7 +138,7 @@ public struct PagerView<Selection: Hashable>: View {
         GeometryReader { proxy in
           let count = CGFloat(pages.count)
           let tabWidth = proxy.size.width / count
-          let selectedIndex = pages.firstIndex { $0.id == AnyHashable(selection.wrappedValue) } ?? 0
+          let selectedIndex = pages.firstIndex { $0.id == selection.wrappedValue } ?? 0
 
           RoundedRectangle(cornerRadius: 2)
             .fill(Color.accentColor)
@@ -163,7 +157,7 @@ public struct PagerView<Selection: Hashable>: View {
     TabView(selection: selection) {
       ForEach(pages) { page in
         page.content
-          .tag(page.typedID(as: Selection.self))
+          .tag(page.id)
       }
     }
     .frame(maxHeight: .infinity)
@@ -172,7 +166,7 @@ public struct PagerView<Selection: Hashable>: View {
 }
 
 extension PagerView where Selection == Int {
-  public init(@PageBuilder<Int> content: () -> [AnyPage]) {
+  public init(@PageBuilder<Int> content: () -> [AnyPage<Selection>]) {
     self.pages = content()
     self._externalSelection = .constant(0)
     self._internalSelection = State(initialValue: 0)
